@@ -40,3 +40,8 @@ Pokémon Snap © Nintendo / HAL Laboratory / Creatures / GAME FREAK. This is an 
 project, not affiliated with or endorsed by them.
 Built with N64Recomp and N64ModernRuntime by Mr-Wiseguy and contributors, and with libctru,
 citro3d and citro2d by devkitPro.
+
+## License
+MIT (see `LICENSE`), for the port's own code, tools and art. `runtime/` is adapted from
+N64ModernRuntime (MIT), and its `thirdparty/` libraries keep their own licenses. The license
+doesn't cover Pokémon Snap itself or anything made from it.
