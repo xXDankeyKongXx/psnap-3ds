@@ -1,0 +1,163 @@
+# N64Recomp config for the Pokemon Snap 3DS port (same route as Megaman643DS).
+# Symbols: Snap64Recomp's tracked patches/pokemonsnap.syms.toml (GPL-3.0, generated from the
+# ethteck/pokemonsnap decomp), so no decomp/IDO build is needed. manual_funcs fill .main's gaps
+# (static callbacks), copied from Snap64Recomp's pokemonsnap.us.toml. N64Recomp ignores
+# manual_funcs with a symbols file, so tools/add_manual_funcs.py has merged them into
+# pokemonsnap.syms.toml; the list stays here as the record of what was added.
+# Run (from recomp/): ../tools/n64recomp/N64Recomp.exe pokemonsnap.us.3ds.toml
+
+[input]
+entrypoint = 0x80000400
+output_func_path = "RecompiledFuncs"
+symbols_file_path = "pokemonsnap.syms.toml"
+rom_file_path = "../rom/pokemonsnap.us.z64"
+# Debugging: record every function entry (source/port/trace.h). Costs one store per call.
+trace_mode = true
+# Declares the hook functions below (source/port/snap_hooks.h)
+recomp_include = """#include "recomp.h"
+#include "snap_hooks.h\""""
+
+manual_funcs = [
+    { name = "manualfunc_8001FE88", section = ".main", vram = 0x8001FE88, size = 0xB8 },
+    { name = "manualfunc_8001FF40", section = ".main", vram = 0x8001FF40, size = 0x98 },
+    { name = "manualfunc_8001FFD8", section = ".main", vram = 0x8001FFD8, size = 0xC4 },
+    { name = "manualfunc_80028DA4", section = ".main", vram = 0x80028DA4, size = 0x254 },
+    { name = "manualfunc_800294D4", section = ".main", vram = 0x800294D4, size = 0x6C },
+    { name = "manualfunc_8002966C", section = ".main", vram = 0x8002966C, size = 0xA8 },
+    { name = "manualfunc_80029714", section = ".main", vram = 0x80029714, size = 0x410 },
+    { name = "manualfunc_80029B24", section = ".main", vram = 0x80029B24, size = 0xEC },
+    { name = "manualfunc_8002C958", section = ".main", vram = 0x8002C958, size = 0x2E8 },
+    { name = "manualfunc_8002CD54", section = ".main", vram = 0x8002CD54, size = 0x28C },
+    { name = "manualfunc_8002DC94", section = ".main", vram = 0x8002DC94, size = 0x14C },
+    { name = "manualfunc_8002E2F8", section = ".main", vram = 0x8002E2F8, size = 0x6F0 },
+    { name = "manualfunc_8002EA58", section = ".main", vram = 0x8002EA58, size = 0xC8 },
+    { name = "manualfunc_8002EB20", section = ".main", vram = 0x8002EB20, size = 0x10E4 },
+    { name = "manualfunc_8002FC04", section = ".main", vram = 0x8002FC04, size = 0x190 },
+    { name = "manualfunc_8002FD94", section = ".main", vram = 0x8002FD94, size = 0xE0 },
+    { name = "manualfunc_8002FE74", section = ".main", vram = 0x8002FE74, size = 0x20C },
+    { name = "manualfunc_8003020C", section = ".main", vram = 0x8003020C, size = 0x550 },
+    { name = "manualfunc_80030838", section = ".main", vram = 0x80030838, size = 0xB4 },
+    { name = "manualfunc_800308EC", section = ".main", vram = 0x800308EC, size = 0x89C },
+    { name = "manualfunc_80031188", section = ".main", vram = 0x80031188, size = 0x70 },
+    { name = "manualfunc_80032BE0", section = ".main", vram = 0x80032BE0, size = 0x11C },
+    { name = "manualfunc_80034398", section = ".main", vram = 0x80034398, size = 0x10C },
+    { name = "manualfunc_80034C70", section = ".main", vram = 0x80034C70, size = 0xC0 },
+    { name = "manualfunc_80036690", section = ".main", vram = 0x80036690, size = 0x670 },
+    { name = "manualfunc_800374B0", section = ".main", vram = 0x800374B0, size = 0x24 },
+    { name = "manualfunc_8003BD60", section = ".main", vram = 0x8003BD60, size = 0x570 },
+    { name = "manualfunc_8003CF20", section = ".main", vram = 0x8003CF20, size = 0x190 },
+]
+
+[patches]
+stubs = [
+]
+
+# RSP microcode blobs (not CPU code): audio -> RSPRecomp/native HLE, graphics -> our renderer
+ignored = [
+    # libultra internals among the manual funcs, replaced by the runtime: the VI manager thread
+    # (viMgrMain, calls __osViSwapContext/__osTimerInterrupt) and a Controller Pak helper
+    # (__osContAddressCrc); no pak is reported, and osCreateViManager is reimplemented.
+    "manualfunc_8003CF20",
+    "manualfunc_80034398",
+    "rspbootTextEnd",
+    "aspMainTextStart",
+    "aspMainTextEnd",
+    "gspF3DEX2_NoN_fifoTextStart",
+    "gspF3DEX2_NoN_fifoTextEnd",
+]
+
+# Every code overlay loads through dmaLoadOverlay(Overlay* a0): {romStart, romEnd, vramStart, ...}.
+# Register its recompiled functions (evicting whatever overlapped) before the copy.
+# The in-course item icons (apple, Pester Ball, Poke Flute, dash) are on the bottom screen instead:
+# hidden as the icon object is drawn (snap_game.cpp).
+# Photo thumbnails for the bottom screen (photo_cache.cpp): the game averages a photo's 2x re-render
+# into a sprite bitmap; caught at the start (PhotoData*, Sprite*), after the render (its image) and
+# before the final cache writeback.
+[[patches.hook]]
+func = "func_80374714_847EC4"
+before_vram = 0x80374714
+text = "photo_thumb_begin(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_80374714_847EC4"
+before_vram = 0x80374744
+text = "photo_thumb_render(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_80374714_847EC4"
+before_vram = 0x80374D00
+text = "photo_thumb_end(rdram, ctx);"
+
+# Development log of thrown items (snap_game.cpp).
+[[patches.hook]]
+func = "handleItemButtonsPress"
+before_vram = 0x80350950
+text = "snap_on_item(2);"
+
+[[patches.hook]]
+func = "Items_SpawnPesterBall"
+before_vram = 0x8035C44C
+text = "snap_on_item(1);"
+
+[[patches.hook]]
+func = "Items_SpawnApple"
+before_vram = 0x8035C5CC
+text = "snap_on_item(0);"
+
+# Camera Check on the touch screen (source/port/camera_check.cpp): its menu's loop and the "Show
+# this picture to Prof. Oak?" loop, each right after reading the controller (v0).
+[[patches.hook]]
+func = "func_camera_check_801E1BD4"
+before_vram = 0x801E1C84
+text = "snap_cc_menu(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_camera_check_801E1EA4"
+before_vram = 0x801E1FD4
+text = "snap_cc_confirm(rdram, ctx);"
+
+[[patches.hook]]
+func = "renDrawSprite"
+before_vram = 0x80017768
+text = "snap_on_draw_sprite(rdram, ctx);"
+
+[[patches.hook]]
+func = "dmaLoadOverlay"
+before_vram = 0x80002B64
+text = "snap_on_overlay_load(rdram, ctx);"
+
+# auThreadMain reads AI_LEN (0xA4500004) directly (osAiGetLength inlined), which is far outside
+# RDRAM here. Each lw is turned into a harmless stack read, and a hook right after it puts the
+# runtime's remaining audio bytes in the destination register (as the register would answer).
+[[patches.instruction]]
+func = "auThreadMain"
+vram = 0x800219DC
+value = 0x8FB90004 # lw $t9, 0x4($sp)
+
+[[patches.hook]]
+func = "auThreadMain"
+before_vram = 0x800219E0
+text = "ctx->r25 = snap_ai_length();"
+
+[[patches.instruction]]
+func = "auThreadMain"
+vram = 0x80022278
+value = 0x8FAE0004 # lw $t6, 0x4($sp)
+
+[[patches.hook]]
+func = "auThreadMain"
+before_vram = 0x8002227C
+text = "ctx->r14 = snap_ai_length();"
+
+# thread5_main checks the RSP's memories at boot (sys/main.c check_sp_imem / check_sp_dmem) by
+# reading SP IMEM/DMEM through KSEG1 (0xA4001000 / 0xA4000000): outside RDRAM, a data abort on the
+# console (Azahar let it pass). The reads become the values a booted N64 has there (6103 and -1).
+[[patches.instruction]]
+func = "check_sp_imem"
+vram = 0x80000484
+value = 0x240F17D7 # addiu $t7, $zero, 6103
+
+[[patches.instruction]]
+func = "check_sp_dmem"
+vram = 0x800004B4
+value = 0x240FFFFF # addiu $t7, $zero, -1

@@ -1,0 +1,45 @@
+; Pass-through vertex shader for the N64 renderer.
+; Vertices arrive already transformed to clip space on the CPU (see n64_renderer.cpp);
+; colors arrive as unsigned bytes and are scaled to 0..1 here.
+; Stereoscopic 3D: each eye's image shifts a vertex sideways (clip y: the top screen's horizontal
+; axis, the render target being portrait) by stereo.x * w + stereo.y + stereo.w * min(C, 2w), with C
+; the convergence distance. For 3D draws that is s * (w - min(C, 2w)): on screen s * (1 - C / w) -
+; nothing at distance C, up to s far away - but never nearer than -s, so what is right in front of
+; the camera (the intro's boot) comes out of the screen no further than the far away goes in. The
+; backend sets stereo per draw (2D: no shift; photos and backgrounds: a fixed shift in y) and for
+; the second eye flips s (c3d_backend.cpp).
+; stereo.z scales clip y first (1 but for backgrounds: shifted the whole way, they are stretched by
+; as much so no edge of the screen is left uncovered).
+
+.constf consts(0.00392156862745, 1.0, 0.0, 0.0)
+.alias  inv255 consts.xxxx
+.constf stereo_consts(300.0, 2.0, 0.0, 0.0) ; convergence distance (N64 units, clip w), 2
+
+.fvec stereo
+
+.out outpos position
+.out outtc0 texcoord0
+.out outtc1 texcoord1
+.out outclr color
+
+.alias inpos v0
+.alias intc0 v1
+.alias intc1 v2
+.alias inclr v3
+
+.proc main
+	mov r0, inpos
+	mul r1.x, stereo.x, inpos.w
+	add r1.x, stereo.y, r1.x
+	mul r2.x, stereo_consts.y, inpos.w
+	min r2.x, stereo_consts.x, r2.x
+	mul r2.x, stereo.w, r2.x
+	add r1.x, r1.x, r2.x
+	mul r0.y, stereo.z, r0.y
+	add r0.y, r0.y, r1.x
+	mov outpos, r0
+	mov outtc0, intc0
+	mov outtc1, intc1
+	mul outclr, inv255, inclr
+	end
+.end

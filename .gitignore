@@ -1,0 +1,35 @@
+# Never in the repo: the game itself, builds, the emulator, and anything cut or recompiled from the game.
+*.z64
+*.n64
+*.v64
+*.cia
+*.3dsx
+*.elf
+*.smdh
+rom/
+dist/
+build/
+azahar/
+citra/
+reference/
+romfs/rom/
+
+# Recompiled from the ROM (regenerate with tools/n64recomp, see README)
+recomp/RecompiledFuncs/
+recomp/rsp/
+
+# Game graphics and sounds (cut from the game by the tools/make_*.py scripts)
+gfx/*.png
+!gfx/subtitle_preview.png
+data/
+source/render/cc_parts_rgba.h
+assets/banner/*
+!assets/banner/subtitle.png
+icon.png
+
+# Development
+tools/tmp/
+tools/devsave/
+tools/n64recomp/
+tools/cia/
+tools/recomp.log
