@@ -16,3 +16,5 @@ void bottom_ui_draw_rom_progress(const char* message, int percent);
 void bottom_ui_draw_rom_help(const char* state, const char* found);
 // ... and the top screen meanwhile.
 void bottom_ui_draw_rom_top(const char* state);
+// Pokemon Island, faded: the bottom screen when there's nothing else to show.
+void bottom_ui_draw_idle(void);

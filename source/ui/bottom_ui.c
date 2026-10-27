@@ -24,6 +24,7 @@
 #include "gyro.h"
 #include "photo_cache.h"
 #include "rom_check.h"
+#include "updater.h"
 #include "settings.h"
 #include "snap_game.h"
 #include "ui_t3x.h"
@@ -277,6 +278,8 @@ static bool has_item(const ItemButton* b) {
 
 // A title on a roll of film (top right): the film counter's canister (gfx/film_head.png, its first
 // 12 columns) and a seamless strip made from its film (gfx/film_strip.png, tools/make_film.py).
+static void draw_island(void);
+
 static void film_title(const char* title) {
     const float fx = 148, fy = 10, end = 316;
     Tex3DS_SubTexture sub;
@@ -292,9 +295,7 @@ static void film_title(const char* title) {
 
 static void draw_course(void) {
     u32 white = C2D_Color32(0xFF, 0xFF, 0xFF, 0xFF), shadow = C2D_Color32(0x00, 0x00, 0x00, 0xA0);
-    // Pokemon Island, faded.
-    C2D_DrawImageAt(C2D_SpriteSheetGetImage(sheet, SHEET_ISLAND), 0, 0, 0.1f, NULL, 1.0f, 1.0f);
-    C2D_DrawRectSolid(0, 0, 0.15f, 320, 240, C2D_Color32(0x08, 0x18, 0x30, 0x70));
+    draw_island();
 
     film_title(snap_course() >= 0 && snap_course() < 7 ? course_names[snap_course()] : "");
 
@@ -699,9 +700,27 @@ static void draw_lab(void) {
 
 // --- Title (boot, intro, title screen, main menu) -----------------------------------------------------
 
+// The title page's Update button (bottom left), with a red "!" when a newer version is out.
+#define UPDATE_X 6
+#define UPDATE_Y 213
+
+static void draw_update_button(void) {
+    UpdView v;
+    updater_view(&v);
+    C2D_DrawImageAt(C2D_SpriteSheetGetImage(sheet, SHEET_BUTTON), UPDATE_X, UPDATE_Y, 0.4f, NULL, 1.0f, 1.0f);
+    text(UPDATE_X + 39, UPDATE_Y + 5, 0.5f, C2D_Color32(0xFF, 0xFF, 0xFF, 0xFF), "Update", C2D_AlignCenter);
+    if (v.state != UPD_AVAILABLE) return;
+    float cx = UPDATE_X + 75, cy = UPDATE_Y + 2;
+    C2D_DrawCircleSolid(cx, cy, 0.7f, 7, C2D_Color32(0xFF, 0xFF, 0xFF, 0xFF));
+    C2D_DrawCircleSolid(cx, cy, 0.71f, 6, C2D_Color32(0xE0, 0x18, 0x18, 0xFF));
+    text(cx + 1, cy - 6, 0.5f, C2D_Color32(0xFF, 0xFF, 0xFF, 0xFF), "!", C2D_AlignCenter);
+}
+
 static void draw_title(const char* rom_state, const char* boot_state, const SnapStats* stats) {
     C2D_DrawImageAt(C2D_SpriteSheetGetImage(sheet, SHEET_ISLAND), 0, 0, 0.1f, NULL, 1.0f, 1.0f);
     text(314, 224, 0.4f, C2D_Color32(0xFF, 0xFF, 0xFF, 0xC0), "v" SNAP_VERSION, C2D_AlignRight);
+    updater_auto_check();
+    draw_update_button();
     // While the game hasn't started (or doesn't), what the front end knows: a stall at boot would
     // otherwise show only this picture and a black top screen.
     static u64 first_tick;
@@ -719,6 +738,118 @@ static void draw_title(const char* rom_state, const char* boot_state, const Snap
     snprintf(line, sizeof(line), "VI %u  display lists %u  audio %u", stats->frames, stats->display_lists, stats->audio_tasks);
     text(18, 178, 0.5f, white, line, 0);
     text(18, 194, 0.5f, white, "Log: sdmc:/3ds/psnap/runtime.log", 0);
+}
+
+// --- Update page (updater.cpp), from the title page's Update button ---------------------------------
+
+static bool upd_open;
+static void rom_page(const char* title);
+
+#define UPD_BTN_Y 182
+#define UPD_BTN_SCALE 1.55f
+
+// Where the page's buttons are: one in the middle, or two side by side.
+static float upd_button_x(int i, int count) { return count == 1 ? 160 - 39 * UPD_BTN_SCALE : (i == 0 ? 30 : 170); }
+
+static void upd_buttons(const UpdView* v, const char* labels[2], int* count) {
+    *count = 0;
+    switch (v->state) {
+    case UPD_AVAILABLE: labels[0] = "Update"; labels[1] = "Not now"; *count = 2; break;
+    case UPD_ERROR: labels[0] = "Try again"; labels[1] = "Close"; *count = 2; break;
+    case UPD_DOWNLOADING:
+    case UPD_INSTALLING: break; // can't be stopped half way
+    case UPD_IDLE:
+    case UPD_CHECKING: labels[0] = "Close"; *count = 1; break;
+    default: labels[0] = "OK"; *count = 1; break;
+    }
+}
+
+// Text wrapped to `width` pixels at the font's 1x size, at most `max_lines` lines from y.
+static void wrapped(float x, float y, int width, int max_lines, u32 color, const char* s) {
+    char line[128];
+    int lines = 0;
+    while (*s && lines < max_lines) {
+        int n = 0, cut = 0;
+        while (s[n] && s[n] != '\n' && n < (int)sizeof(line) - 1) {
+            line[n] = s[n];
+            line[n + 1] = 0;
+            if (text_width(line, 1) > width) break;
+            if (s[n] == ' ') cut = n;
+            n++;
+        }
+        if (s[n] && s[n] != '\n' && cut > 0) n = cut; // break at a space
+        memcpy(line, s, n);
+        line[n] = 0;
+        text(x, y + lines * 14, 0.45f, color, line, 0);
+        lines++;
+        s += n;
+        while (*s == ' ' || *s == '\n') s++;
+    }
+}
+
+static void draw_update_page(void) {
+    u32 white = C2D_Color32(0xFF, 0xFF, 0xFF, 0xFF), dim = C2D_Color32(0xC0, 0xC8, 0xD8, 0xFF);
+    u32 warn = C2D_Color32(0xFF, 0xC0, 0x60, 0xFF);
+    UpdView v;
+    updater_view(&v);
+    rom_page("Update");
+    char line[96];
+    switch (v.state) {
+    case UPD_IDLE:
+    case UPD_CHECKING:
+        text(160, 96, 0.45f, white, "Checking GitHub for a new version...", C2D_AlignCenter);
+        break;
+    case UPD_LATEST:
+        snprintf(line, sizeof(line), "You have the latest version (v%d).", v.current);
+        text(160, 96, 0.45f, white, line, C2D_AlignCenter);
+        break;
+    case UPD_AVAILABLE:
+        snprintf(line, sizeof(line), "Version %d is out!  (You have v%d.)", v.latest, v.current);
+        text(160, 52, 0.45f, warn, line, C2D_AlignCenter);
+        wrapped(14, 74, 292, 7, white, v.notes[0] ? v.notes : "No notes for this one.");
+        break;
+    case UPD_DOWNLOADING:
+    case UPD_INSTALLING:
+        if (v.state == UPD_DOWNLOADING) snprintf(line, sizeof(line), "Downloading v%d...", v.latest);
+        else snprintf(line, sizeof(line), "%s", v.message[0] ? v.message : "Installing...");
+        text(160, 92, 0.45f, white, line, C2D_AlignCenter);
+        C2D_DrawRectSolid(40, 112, 0.5f, 240, 14, C2D_Color32(0x20, 0x20, 0x20, 0xE0));
+        C2D_DrawRectSolid(42, 114, 0.5f, 236 * (v.percent < 0 ? 0 : v.percent > 100 ? 100 : v.percent) / 100, 10, C2D_Color32(0xF0, 0x90, 0x20, 0xFF));
+        text(160, 140, 0.45f, dim, "Keep the game open until it's done.", C2D_AlignCenter);
+        break;
+    case UPD_DONE:
+        snprintf(line, sizeof(line), "Version %d is installed!", v.latest);
+        text(160, 84, 0.45f, warn, line, C2D_AlignCenter);
+        text(160, 108, 0.45f, white, "Close the game and start it again", C2D_AlignCenter);
+        text(160, 124, 0.45f, white, "to play the new version.", C2D_AlignCenter);
+        break;
+    case UPD_ERROR:
+        text(160, 84, 0.45f, warn, "The update didn't work:", C2D_AlignCenter);
+        text(160, 104, 0.45f, white, v.message, C2D_AlignCenter);
+        break;
+    }
+    const char* labels[2];
+    int count;
+    upd_buttons(&v, labels, &count);
+    for (int i = 0; i < count; i++) {
+        float x = upd_button_x(i, count);
+        C2D_DrawImageAt(C2D_SpriteSheetGetImage(sheet, SHEET_BUTTON), x, UPD_BTN_Y, 0.4f, NULL, UPD_BTN_SCALE, UPD_BTN_SCALE);
+        text(x + 39 * UPD_BTN_SCALE, UPD_BTN_Y + 9, 0.5f, white, labels[i], C2D_AlignCenter);
+    }
+}
+
+static void update_input(const touchPosition* touch) {
+    UpdView v;
+    updater_view(&v);
+    const char* labels[2];
+    int count;
+    upd_buttons(&v, labels, &count);
+    for (int i = 0; i < count; i++) {
+        if (!inside(touch, upd_button_x(i, count), UPD_BTN_Y, 78 * UPD_BTN_SCALE, 21 * UPD_BTN_SCALE)) continue;
+        if (v.state == UPD_AVAILABLE && i == 0) updater_install();
+        else if (v.state == UPD_ERROR && i == 0) updater_check();
+        else upd_open = false;
+    }
 }
 
 // --- ROM pages (rom_check.c): checking it the first time, or none usable ------------------------------
@@ -769,20 +900,14 @@ void bottom_ui_draw_rom_top(const char* state) {
 
 // --- Status page (other scenes) ----------------------------------------------------------------
 
-static void draw_status(const char* rom_state, const char* boot_state, const SnapStats* stats) {
-    u32 white = C2D_Color32(0xFF, 0xFF, 0xFF, 0xFF), dim = C2D_Color32(0xA8, 0xB8, 0xD0, 0xFF);
-    C2D_DrawRectSolid(0, 0, 0.4f, 320, 36, C2D_Color32(0xD8, 0x30, 0x30, 0xFF));
-    text(12, 8, 0.75f, white, "Pokemon Snap 3DS", 0);
-    text(250, 13, 0.5f, white, "v" SNAP_VERSION, 0);
-    char line[96];
-    snprintf(line, sizeof(line), "ROM: %s", rom_state);
-    text(12, 50, 0.5f, dim, line, 0);
-    snprintf(line, sizeof(line), "Game: %s", boot_state);
-    text(12, 70, 0.5f, dim, line, 0);
-    snprintf(line, sizeof(line), "Frames %u   display lists %u   audio %u", stats->frames, stats->display_lists, stats->audio_tasks);
-    text(12, 90, 0.5f, dim, line, 0);
-    text(12, 212, 0.45f, dim, "START+SELECT: exit", 0);
+// Scenes without a page of their own (the intro, name entry, Prof. Oak's Check, the album, the
+// PKMN Report...) and the moment before the game starts: Pokemon Island, faded as on the course page.
+static void draw_island(void) {
+    C2D_DrawImageAt(C2D_SpriteSheetGetImage(sheet, SHEET_ISLAND), 0, 0, 0.1f, NULL, 1.0f, 1.0f);
+    C2D_DrawRectSolid(0, 0, 0.15f, 320, 240, C2D_Color32(0x08, 0x18, 0x30, 0x70));
 }
+
+void bottom_ui_draw_idle(void) { draw_island(); }
 
 // --- Entry points ------------------------------------------------------------------------------------
 
@@ -806,7 +931,15 @@ void bottom_ui_input(u32 down, const touchPosition* touch) {
         return;
     }
     if (!(down & KEY_TOUCH)) return;
+    if (upd_open) {
+        update_input(touch);
+        return;
+    }
     SnapScene scene = snap_scene();
+    if (scene == SNAP_SCENE_TITLE && inside(touch, UPDATE_X, UPDATE_Y, 78, 21)) {
+        upd_open = true;
+        updater_check();
+    }
     if (scene == SNAP_SCENE_LAB) {
         for (int p = 0; p < 2; p++) {
             Setting st = panels[p].setting;
@@ -830,9 +963,12 @@ u32 bottom_ui_keys(void) { return tap_frames > 0 && snap_scene() == SNAP_SCENE_C
 void bottom_ui_draw(const char* rom_state, const char* boot_state, const SnapStats* stats) {
     SnapScene scene = snap_scene();
     CcMode cc = cc_view(NULL);
+    if (upd_open && scene != SNAP_SCENE_TITLE && !updater_busy()) upd_open = false; // the game went on
     if (cc != CC_OFF) {
         best.course = -1;
         draw_camera_check(cc);
+    } else if (upd_open && (scene == SNAP_SCENE_TITLE || updater_busy())) {
+        draw_update_page();
     } else if (scene == SNAP_SCENE_COURSE) {
         update_best();
         draw_course();
@@ -843,6 +979,6 @@ void bottom_ui_draw(const char* rom_state, const char* boot_state, const SnapSta
         draw_lab();
     } else {
         best.course = -1;
-        draw_status(rom_state, boot_state, stats);
+        draw_island();
     }
 }

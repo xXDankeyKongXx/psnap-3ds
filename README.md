@@ -7,6 +7,7 @@ and there are extras made for the console:
 - Camera Check (choosing pictures for Prof. Oak and the album) works on the touch screen, with the
   chosen picture at high resolution on the top screen
 - gyro aiming and stereoscopic 3D
+- an Update button on the title screen that installs new releases from this repo
 
 **No game data is included.** You need your own dump of Pokémon Snap (USA). Its SHA-1, in .z64 byte
 order, is `edc7c49cc568c045fe48be0d18011c30f393cbaf`. Put it in `sdmc:/3ds/psnap/` or

@@ -453,3 +453,25 @@ needed", the reason (same line as the bottom screen) and a pointer to the bottom
 instructions, in the game's font (`bottom_ui_draw_rom_top`, drawn from main.c). The top target has to
 be cleared with C2D_TargetClear first: the N64 renderer clears depth to the far end, which hides 2D.
 Checked in Azahar with the ROM moved off the SD (tools/tmp/v35_no_rom.png).
+
+## v36 — Pokemon Island wherever the bottom screen had nothing
+
+Scenes without a page of their own (the intro, name entry, Camera Check's messages, Prof. Oak's
+Check, the album, the PKMN Report...) showed a developer status page (ROM/game state, frame counts);
+they now show Pokemon Island faded as on the course page (`draw_island`). So does the moment
+before the game starts: main.c draws one frame of it before the ROM check and `snap_boot`, which left
+the bottom screen black. The title screen keeps its undimmed island. Checked in Azahar
+(tools/tmp/idle2/sheet.png: Prof. Oak's Check).
+
+## v37 — Updates from GitHub
+
+The title page has an **Update** button (bottom left). Once per start the title screen asks GitHub
+for the latest release in the background (not on scripted test runs: the API allows 60 requests an
+hour); a newer one puts a red "!" on the button. The update page shows the version and the release
+notes; Update downloads the shareable CIA (or the .3dsx when started from the Homebrew Launcher),
+checks its size and SHA-256 against GitHub's, copies a personal build's ROM to the SD card (the
+shareable CIA has none), installs it over this title with the AM service and asks for a restart.
+`source/port/updater.cpp`: curl + mbedTLS (portlibs 3ds-curl, 3ds-mbedtls), romfs/cacert.pem with
+the 9 roots GitHub's hosts chain to (USERTrust/Sectigo for api.github.com, ISRG for
+release-assets.githubusercontent.com, DigiCert), sockets only while a job runs. Releases are made
+with `make github-release NOTES=<file>` (tag vN, assets psnap-3ds.cia / psnap-3ds.3dsx).

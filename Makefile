@@ -71,13 +71,14 @@ CXXFLAGS	:= $(CFLAGS) -std=gnu++20
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS	:= -lcitro2d -lcitro3d -lctru -lm
+# curl + mbedTLS (devkitPro portlibs 3ds-curl, 3ds-mbedtls): the updater's HTTPS (updater.cpp).
+LIBS	:= -lcurl -lmbedtls -lmbedx509 -lmbedcrypto -lz -lcitro2d -lcitro3d -lctru -lm
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
 # include and lib
 #---------------------------------------------------------------------------------
-LIBDIRS	:= $(CTRULIB)
+LIBDIRS	:= $(PORTLIBS) $(CTRULIB)
 
 
 #---------------------------------------------------------------------------------
@@ -241,11 +242,22 @@ makecia:
 # A numbered copy for testers: dist/psnap-3ds-v<VERSION>.3dsx (the SMDH is rebuilt so the HOME
 # menu / Azahar entry shows the same number).
 release:
-	@rm -f $(TARGET).smdh $(BUILD)/main.o $(BUILD)/crash_log.o $(BUILD)/bottom_ui.o # the files with SNAP_VERSION in them
+	@rm -f $(TARGET).smdh $(BUILD)/main.o $(BUILD)/crash_log.o $(BUILD)/bottom_ui.o $(BUILD)/updater.o # the files with SNAP_VERSION in them
 	@$(MAKE) --no-print-directory deploy
 	@mkdir -p dist
 	@cp $(TARGET).3dsx dist/$(TARGET)-v$(VERSION).3dsx
 	@echo released dist/$(TARGET)-v$(VERSION).3dsx
+
+# Publishes this version on GitHub (xXDankeyKongXx/psnap-3ds), where the in-game updater looks
+# (updater.cpp): tag v<VERSION> on the pushed commit, with the shareable CIA and .3dsx as
+# psnap-3ds.cia / psnap-3ds.3dsx and NOTES (a file) as the description. Never the -personal CIA.
+github-release:
+	@[ -f dist/$(TARGET)-v$(VERSION).cia ] && [ -f dist/$(TARGET)-v$(VERSION).3dsx ] || { echo "make release cia first"; exit 1; }
+	@[ -f "$(NOTES)" ] || { echo "NOTES=<file> needed"; exit 1; }
+	@rm -rf $(BUILD)/github && mkdir -p $(BUILD)/github
+	@cp dist/$(TARGET)-v$(VERSION).cia $(BUILD)/github/$(TARGET).cia
+	@cp dist/$(TARGET)-v$(VERSION).3dsx $(BUILD)/github/$(TARGET).3dsx
+	@gh release create v$(VERSION) $(BUILD)/github/$(TARGET).cia $(BUILD)/github/$(TARGET).3dsx 		--repo xXDankeyKongXx/psnap-3ds --title "v$(VERSION)" --notes-file "$(NOTES)" --target main
 
 run: deploy
 	@powershell -NoProfile -ExecutionPolicy Bypass -File "$$(cygpath -w "$(CURDIR)/tools/run_emu.ps1")"

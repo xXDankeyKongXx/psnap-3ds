@@ -20,6 +20,7 @@
 #include "crash_log.h"
 #include "rom_check.h"
 #include "log_ring.h"
+#include "updater.h"
 
 #define DATA_PATH "sdmc:/3ds/psnap"
 // The ROM packed into the app itself (romfs/rom/, by `make cia-personal`): a personal build needs
@@ -326,7 +327,7 @@ static void watchdog(void* arg) {
     }
 }
 
-int main(void) {
+int main(int argc, char** argv) {
     osSetSpeedupEnable(true); // New 3DS: 804 MHz + L2 cache (no-op on Old 3DS)
     mkdir("sdmc:/3ds", 0777);
     mkdir(DATA_PATH, 0777);
@@ -355,6 +356,12 @@ int main(void) {
     APT_CheckNew3DS(&is_new3ds);
     // The app's own ROM (a personal build), else the player's from the SD card.
     bottom_target = bottom;
+    // Pokemon Island until the ROM check and the game's start-up are done (a black screen otherwise).
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    C2D_TargetClear(bottom, C2D_Color32(0x18, 0x20, 0x30, 0xFF));
+    C2D_SceneBegin(bottom);
+    bottom_ui_draw_idle();
+    C3D_FrameEnd(0);
     static RomCheck rom;
     rom_check(&rom, DATA_PATH, ROMFS_ROM_PATH, rom_progress);
     const char* rom_state = rom.state;
@@ -376,6 +383,8 @@ int main(void) {
     FILE* devlog = fopen(DATA_PATH "/devlog.txt", "r");
     dev_logging = autoinput.count > 0 || devlog;
     if (devlog) fclose(devlog);
+    // Test runs never ask GitHub by themselves (its API allows 60 requests an hour).
+    updater_init(argc > 0 ? argv[0] : NULL, !dev_logging);
 
     while (aptMainLoop()) {
         hidScanInput();
@@ -554,6 +563,7 @@ int main(void) {
     log_ring_drain();
     snap_shutdown();
     n64_top_exit();
+    updater_exit();
     bottom_ui_exit();
     gyro_exit();
     C2D_Fini();
