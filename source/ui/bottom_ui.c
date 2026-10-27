@@ -711,8 +711,8 @@ static void draw_update_button(void) {
     text(UPDATE_X + 39, UPDATE_Y + 5, 0.5f, C2D_Color32(0xFF, 0xFF, 0xFF, 0xFF), "Update", C2D_AlignCenter);
     if (v.state != UPD_AVAILABLE) return;
     float cx = UPDATE_X + 75, cy = UPDATE_Y + 2;
-    C2D_DrawCircleSolid(cx, cy, 0.7f, 7, C2D_Color32(0xFF, 0xFF, 0xFF, 0xFF));
-    C2D_DrawCircleSolid(cx, cy, 0.71f, 6, C2D_Color32(0xE0, 0x18, 0x18, 0xFF));
+    C2D_DrawCircleSolid(cx, cy, 0.5f, 7, C2D_Color32(0xFF, 0xFF, 0xFF, 0xFF));
+    C2D_DrawCircleSolid(cx, cy, 0.51f, 6, C2D_Color32(0xE0, 0x18, 0x18, 0xFF));
     text(cx + 1, cy - 6, 0.5f, C2D_Color32(0xFF, 0xFF, 0xFF, 0xFF), "!", C2D_AlignCenter);
 }
 

@@ -475,3 +475,10 @@ shareable CIA has none), installs it over this title with the AM service and ask
 the 9 roots GitHub's hosts chain to (USERTrust/Sectigo for api.github.com, ISRG for
 release-assets.githubusercontent.com, DigiCert), sockets only while a job runs. Releases are made
 with `make github-release NOTES=<file>` (tag vN, assets psnap-3ds.cia / psnap-3ds.3dsx).
+
+## v38 — the Update button's "!" shows
+
+v37's red dot hid its "!" (the dot was drawn above the font's depth). Checked in Azahar: a build
+labelled v36 found v37 on GitHub, showed its notes, downloaded the CIA (size and SHA-256 matched)
+and installed it through AM (Azahar runs a .3dsx without the Homebrew Launcher's environment, so it
+takes the CIA path); after "Not now" the button shows the "!" (tools/tmp/upd4).

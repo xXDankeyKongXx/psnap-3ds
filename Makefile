@@ -251,6 +251,7 @@ release:
 # Publishes this version on GitHub (xXDankeyKongXx/psnap-3ds), where the in-game updater looks
 # (updater.cpp): tag v<VERSION> on the pushed commit, with the shareable CIA and .3dsx as
 # psnap-3ds.cia / psnap-3ds.3dsx and NOTES (a file) as the description. Never the -personal CIA.
+# gh only finds its login from a Windows shell (Git Bash, PowerShell), not the devkitPro one.
 github-release:
 	@[ -f dist/$(TARGET)-v$(VERSION).cia ] && [ -f dist/$(TARGET)-v$(VERSION).3dsx ] || { echo "make release cia first"; exit 1; }
 	@[ -f "$(NOTES)" ] || { echo "NOTES=<file> needed"; exit 1; }
